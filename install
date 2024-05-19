@@ -1,0 +1,13 @@
+#! /bin/bash
+
+set -x
+set -euo pipefail
+
+vivaldiApp=~/Applications/Vivaldi.app
+
+wd=$(dirname "$0")
+
+for i in "$wd"/mods/*.{js,html}; do
+    b=$(basename "$i")
+    cp "$i" "$vivaldiApp"/'Contents/Frameworks/Vivaldi Framework.framework/Resources/vivaldi/'"$b"
+done
