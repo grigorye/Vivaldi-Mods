@@ -7,7 +7,11 @@ vivaldiApp=~/Applications/Vivaldi.app
 
 wd=$(dirname "$0")
 
+vivaldiResources="$vivaldiApp"/'Contents/Frameworks/Vivaldi Framework.framework/Resources/vivaldi'
+
 for i in "$wd"/mods/*.{js,html}; do
     b=$(basename "$i")
-    cp "$i" "$vivaldiApp"/'Contents/Frameworks/Vivaldi Framework.framework/Resources/vivaldi/'"$b"
+    if ! diff -u "$vivaldiResources/$b" "$i"; then
+        cp "$i" "$vivaldiResources/$b"
+    fi
 done
