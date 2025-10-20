@@ -2,187 +2,174 @@
   "use strict";
 
   const config = {
-    // デフォルト以外のワークスペースで自動タブスタックを使用する (true: 有効, false: 無効)
-    // Use automatic tab stacking in non-default workspaces (true: enable, false: disable)
-    workspace: true,
+    // ã‚¿ãƒ–ã‚¹ã‚¿ãƒƒã‚¯ã«ãƒ™ãƒ¼ã‚¹ãƒ‰ãƒ¡ã‚¤ãƒ³ã‚’ä½¿ç”¨ã™ã‚‹ (true: æœ‰åŠ¹, false: ç„¡åŠ¹)
+    // Use the base domain for tab stacks (true: enabled, false: disabled)
+    base_domain: false,
 
-    // サブドメインごとにタブをスタックする (true: 有効, false: 無効)
-    // Stack tabs by subdomain (true: enable, false: disable)
-    subdomain: true,
+    // ã‚¿ãƒ–ã‚¹ã‚¿ãƒƒã‚¯ã®åå‰ã‚’è‡ªå‹•çš„ã«å¤‰æ›´ã™ã‚‹ (0: ç„¡åŠ¹, 1: ãƒ›ã‚¹ãƒˆåã‚’ä½¿ç”¨, 2: ãƒ™ãƒ¼ã‚¹ãƒ‰ãƒ¡ã‚¤ãƒ³ã‹ã‚‰ç”Ÿæˆ)
+    // Automatically change the name of the tab stack (0: disabled, 1: use hostname, 2: generate from base domain)
+    rename_stack: 2,
 
-    // タブスタック名を自動的に変更する (0: 無効, 1: ホスト名を使用, 2: ベースドメインから生成)
-    // Automatically change tab stack names (0: disabled, 1: use hostname, 2: generated from base domain)
-    stackname: 0,
+    // è‡ªå‹•ã‚¿ãƒ–ã‚¹ã‚¿ãƒƒã‚¯ã‚’è¨±å¯ã™ã‚‹ãƒ¯ãƒ¼ã‚¯ã‚¹ãƒšãƒ¼ã‚¹ (å®Œå…¨ä¸€è‡´ã‚‚ã—ãã¯ <default_workspace>)
+    // * æœªè¨­å®šã®å ´åˆã¯ã™ã¹ã¦ã®ãƒ¯ãƒ¼ã‚¯ã‚¹ãƒšãƒ¼ã‚¹ã§è‡ªå‹•ã‚¿ãƒ–ã‚¹ã‚¿ãƒƒã‚¯ã‚’è¨±å¯ã™ã‚‹
+    // Workspaces that allow automatic tab stacking (exact match or <default_workspace>)
+    // * If not set, automatic tab stacking is allowed in all workspaces
+    allow_workspaces: [
+      "<default_workspace>",
+      // "Shopping",
+    ],
 
-    // 自動タブスタックの対象とするホストのルール (完全一致もしくは正規表現)
-    // Rules for hosts to be included in the automatic tab stack (exact match or regular expression)
-    includes: [],
+    // è‡ªå‹•ã‚¿ãƒ–ã‚¹ã‚¿ãƒƒã‚¯ã‚’è¨±å¯ã™ã‚‹ãƒ‰ãƒ¡ã‚¤ãƒ³ (å®Œå…¨ä¸€è‡´ã‚‚ã—ãã¯æ­£è¦è¡¨ç¾)
+    // * æœªè¨­å®šã®å ´åˆã¯ã™ã¹ã¦ã®ãƒ‰ãƒ¡ã‚¤ãƒ³ã§è‡ªå‹•ã‚¿ãƒ–ã‚¹ã‚¿ãƒƒã‚¯ã‚’è¨±å¯ã™ã‚‹
+    // Domains that allow automatic tab stacking (exact match or regular expression)
+    // * If not set, automatic tab stacking is allowed for all domains
+    allow_domains: [
+      // "www.example.com",
+      // /^(.+\.)?example\.net$/,
+    ],
 
-    // 自動タブスタックから除外するホストのルール (完全一致もしくは正規表現)
-    // Rules for hosts to be excluded from the automatic tab stack (exact match or regular expression)
-    excludes: [
-      // 'www.example.com',
+    // è‡ªå‹•ã‚¿ãƒ–ã‚¹ã‚¿ãƒƒã‚¯ã‹ã‚‰é™¤å¤–ã™ã‚‹ãƒ‰ãƒ¡ã‚¤ãƒ³ (å®Œå…¨ä¸€è‡´ã‚‚ã—ãã¯æ­£è¦è¡¨ç¾)
+    // Domains to exclude from automatic tab stacking (exact match or regular expression)
+    block_domains: [
+      // "www.example.com",
       // /^(.+\.)?example\.net$/,
     ],
   };
 
-  const addTabGroup = async (tabId, groupId) => {
-    const tab = await chrome.tabs.get(tabId);
-    const extData = JSON.parse(tab.vivExtData);
-    extData.group = groupId;
-    await chrome.tabs.update(tabId, { vivExtData: JSON.stringify(extData) });
-  };
+  const mergeArrays = (...arrays) => [...new Set(arrays.flat())];
 
   const getUrlFragments = (url) => vivaldi.utilities.getUrlFragments(url);
 
   const getBaseDomain = (url) => {
-    const urlFragments = getUrlFragments(url);
-    return (
-      urlFragments.host.match(`([^.]+\\.${urlFragments.tld})$`)?.[1] ||
-      urlFragments.host
-    );
+    const { hostForSecurityDisplay, tld } = getUrlFragments(url);
+    return hostForSecurityDisplay.match(`([^.]+\\.${tld})$`)?.[1] || hostForSecurityDisplay;
   };
 
-  const getHostname = (url) =>
-    config.subdomain ? getUrlFragments(url).host : getBaseDomain(url);
+  const getHostname = (url) => {
+    const { hostForSecurityDisplay } = getUrlFragments(url);
+    return config.base_domain ? getBaseDomain(url) : hostForSecurityDisplay;
+  };
 
   const matchHostRule = (url, rule) => {
-    const hostname = getUrlFragments(url).host;
-    return rule instanceof RegExp ? rule.test(hostname) : hostname === rule;
+    const { hostForSecurityDisplay } = getUrlFragments(url);
+    return rule instanceof RegExp ? rule.test(hostForSecurityDisplay) : hostForSecurityDisplay === rule;
   };
 
-  const getTabInfo = async (tabId) => {
+  const getTab = async (tabId) => {
     const tab = await chrome.tabs.get(tabId);
 
-    if (tab.id !== -1) {
+    if (tab.vivExtData) {
       tab.vivExtData = JSON.parse(tab.vivExtData);
       return tab;
     }
   };
 
-  const getTabStore = async () => {
-    const tabStore = {};
+  const getTabIndex = async (tabId) => (await getTab(tabId)).index;
 
+  const getWorkspaceName = async (workspaceId) => {
+    if (!workspaceId) {
+      return "<default_workspace>";
+    }
+    const workspaceList = await vivaldi.prefs.get("vivaldi.workspaces.list");
+    return workspaceList.find((item) => item.id === workspaceId).name;
+  };
+
+  const getTabsByWorkspace = async () => {
     const tabs = (await chrome.tabs.query({ currentWindow: true }))
-      .filter((tab) => tab.id !== -1)
-      .map((tab) =>
-        Object.assign(tab, { vivExtData: JSON.parse(tab.vivExtData) })
-      )
-      .filter((tab) => !tab.pinned)
-      .filter((tab) => !tab.vivExtData.panelId)
-      .filter((tab) =>
-        !config.includes.length
-          ? true
-          : config.includes.find((rule) => matchHostRule(tab.url, rule))
-      )
-      .filter(
-        (tab) => !config.excludes.find((rule) => matchHostRule(tab.url, rule))
-      );
+      .filter((tab) => tab.id !== -1 && tab.vivExtData)
+      .map((tab) => Object.assign(tab, { vivExtData: JSON.parse(tab.vivExtData) }))
+      .filter((tab) => !tab.pinned && !tab.vivExtData.panelId)
+      .filter((tab) => !config.allow_domains.length || config.allow_domains.find((rule) => matchHostRule(tab.url, rule)))
+      .filter((tab) => !config.block_domains.length || !config.block_domains.find((rule) => matchHostRule(tab.url, rule)));
 
-    const workspaces = Object.groupBy(
-      tabs,
-      (tab) => tab.vivExtData.workspaceId
-    );
-
-    for (const [workspaceId, tabs] of Object.entries(workspaces)) {
-      tabStore[workspaceId] = Object.groupBy(
-        tabs,
-        (tab) => tab.vivExtData.group
-      );
-    }
-    return tabStore;
+    return Object.groupBy(tabs, (tab) => tab.vivExtData.workspaceId);
   };
 
-  const getTabGroupMap = (tabStore) => {
-    const tabGroupMap = {};
+  const getTabsByStack = (tabs) => Object.groupBy(tabs, (tab) => tab.vivExtData.group);
 
-    for (const [workspaceId, groups] of Object.entries(tabStore)) {
-      tabGroupMap[workspaceId] = {};
+  const getTabsByHost = (tabs) => Object.groupBy(tabs, (tab) => getHostname(tab.url));
 
-      for (const [groupId, tabs] of Object.entries(groups)) {
-        const hostnames = Object.keys(
-          Object.groupBy(tabs, (tab) => getHostname(tab.url))
-        );
+  const getMaxTabsStackId = (tabsByStack, targetHost) => {
+    const counts = {};
 
-        if (hostnames.length === 1 && groupId && groupId !== "undefined") {
-          tabGroupMap[workspaceId][hostnames[0]] ??= [];
-          tabGroupMap[workspaceId][hostnames[0]].push(groupId);
-        }
+    for (const [stackId, tabs] of Object.entries(tabsByStack)) {
+      if (stackId !== "undefined") {
+        const tabsByHost = getTabsByHost(tabs);
+        const count = tabsByHost[targetHost]?.length || 0;
+
+        delete tabsByHost[targetHost];
+        counts[stackId] = Object.values(tabsByHost).reduce((acc, tabs) => {
+          return acc > tabs.length ? acc : 0;
+        }, count);
       }
     }
-    return tabGroupMap;
+
+    return Object.entries(counts).reduce(
+      (acc, [stackId, count]) => {
+        return acc[1] < count ? [stackId, count] : acc;
+      },
+      [, 0]
+    )[0];
   };
 
-  const groupingTabs = async (targetTab) => {
-    const tabStore = await getTabStore();
-    const tabGroupMap = getTabGroupMap(tabStore);
+  const getTabStackName = (url) => {
+    let stackName;
 
-    for (const [workspaceId, groups] of Object.entries(tabStore)) {
-      if (!config.workspace && workspaceId !== "undefined") continue;
-      if (String(targetTab.vivExtData.workspaceId) !== workspaceId) continue;
+    switch (config.rename_stack) {
+      case 1:
+        stackName = getHostname(url);
+        break;
+      case 2:
+        stackName = getBaseDomain(url).split(".")[0];
+        stackName = stackName.charAt(0).toUpperCase() + stackName.slice(1);
+        break;
+    }
+    return stackName;
+  };
 
-      const tabGroups = {};
-      for (const tabs of Object.values(groups)) {
-        for (const tab of tabs) {
-          const hostname = getHostname(tab.url);
-          tabGroupMap[workspaceId][hostname] ??= [crypto.randomUUID()];
+  const addTabStack = async (tabId, stackId, stackName) => {
+    const { vivExtData } = await getTab(tabId);
 
-          const groupId = tabGroupMap[workspaceId][hostname].sort()[0];
-          tabGroups[groupId] ??= [];
-          tabGroups[groupId].push(tab);
-        }
-      }
+    if (stackName) {
+      vivExtData.fixedGroupTitle = stackName;
+    }
+    vivExtData.group = stackId;
+    chrome.tabs.update(tabId, { vivExtData: JSON.stringify(vivExtData) });
+  };
 
-      for (const [groupId, tabs] of Object.entries(tabGroups)) {
-        if (getHostname(targetTab.url) === getHostname(tabs[0].url)) {
-          let tabIndex = (await getTabInfo(tabs[0].id)).index;
+  const stackingTabs = async (workspaceId) => {
+    const workspaceName = await getWorkspaceName(workspaceId);
 
-          if (config.stackname) {
-            const stackNameMap = await vivaldi.prefs.get(
-              "vivaldi.tabs.stacking.name_map"
-            );
-            let stackname;
+    if (!config.allow_workspaces.length || config.allow_workspaces.includes(workspaceName)) {
+      const tabsByWorkspace = await getTabsByWorkspace();
+      const tabsByStack = getTabsByStack(tabsByWorkspace[workspaceId]);
+      const tabsByHost = getTabsByHost(tabsByWorkspace[workspaceId]);
 
-            switch (config.stackname) {
-              case 1:
-                stackname = getHostname(targetTab.url);
-                break;
-              case 2:
-                stackname = getBaseDomain(targetTab.url).split(".")[0];
-                stackname =
-                  stackname.charAt(0).toUpperCase() + stackname.slice(1);
-                break;
-            }
-            await vivaldi.prefs.set({
-              path: "vivaldi.tabs.stacking.name_map",
-              value: Object.assign(stackNameMap, { [groupId]: stackname }),
-            });
-          }
+      for (const [host, tabs] of Object.entries(tabsByHost)) {
+        const targetStackId = getMaxTabsStackId(tabsByStack, host) || crypto.randomUUID();
+        const targetStackTabs = tabsByStack[targetStackId] ? getTabsByHost(tabsByStack[targetStackId])[host] : [];
+        const targetTabs = mergeArrays(targetStackTabs, tabs);
+        const targetStackName = getTabStackName(tabs[0].pendingUrl || tabs[0].url);
 
-          for (const tab of tabs) {
-            if (tab.vivExtData.group !== groupId) {
-              addTabGroup(tab.id, groupId);
-            }
-            chrome.tabs.move(tab.id, { index: tabIndex });
-            tabIndex++;
-          }
+        let tabIndex = await getTabIndex(targetTabs[0].id);
+
+        for (const tab of targetTabs) {
+          addTabStack(tab.id, targetStackId, targetStackName);
+          chrome.tabs.move(tab.id, { index: tabIndex });
+          tabIndex++;
         }
       }
     }
   };
 
   chrome.webNavigation.onCommitted.addListener(async (details) => {
-    const tab = await getTabInfo(details.tabId);
+    if (details.tabId !== -1) {
+      const tab = await getTab(details.tabId);
 
-    if (
-      tab &&
-      !tab.pinned &&
-      !tab.vivExtData.panelId &&
-      details.frameType === "outermost_frame"
-    ) {
-      setTimeout(() => {
-        groupingTabs(tab);
-      }, 100);
+      if (tab && !tab.pinned && !tab.vivExtData.panelId && details.frameType === "outermost_frame") {
+        const workspaceId = tab.vivExtData.workspaceId;
+        stackingTabs(workspaceId);
+      }
     }
   });
 })();
