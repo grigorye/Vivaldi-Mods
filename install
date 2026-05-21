@@ -3,7 +3,8 @@
 set -x
 set -euo pipefail
 
-vivaldiApp=~/Applications/Vivaldi.app
+app_dir=${1:-/Applications}
+vivaldiApp="$app_dir/Vivaldi.app"
 
 wd=$(dirname "$0")
 
